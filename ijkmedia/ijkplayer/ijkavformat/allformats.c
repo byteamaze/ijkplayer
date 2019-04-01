@@ -75,9 +75,7 @@ void ijkav_register_all(void)
 
     /* protocols */
     av_log(NULL, AV_LOG_INFO, "===== custom modules begin =====\n");
-#ifdef __ANDROID__
     IJK_REGISTER_PROTOCOL(ijkmediadatasource);
-#endif
     IJK_REGISTER_PROTOCOL(ijkio);
     IJK_REGISTER_PROTOCOL(async);
     IJK_REGISTER_PROTOCOL(ijklongurl);

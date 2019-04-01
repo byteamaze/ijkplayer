@@ -30,6 +30,14 @@
 #define CACHE_FILE_PATH_MAX_LEN        512
 #define IJKIOAPP_EVENT_CACHE_STATISTIC 0x1003  //IJKIOAppCacheStatistic share with avutil/application.h
 
+// IJK自定义I/O容器
+typedef struct IJKDataSourceContext {
+    void* data_source; // 数据源
+    int (*read_packet)(void *opaque, uint8_t *buf, int64_t pos, int buf_size); // 读取数据方法
+    int (*close)(void *opaque); // 关闭数据源
+    long (*total_size)(void *opaque); // 数据总大小
+} IJKDataSourceContext;
+
 typedef struct IjkIOAppCacheStatistic {
     int64_t cache_physical_pos;
     int64_t cache_file_forwards;

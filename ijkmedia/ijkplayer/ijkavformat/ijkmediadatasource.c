@@ -19,8 +19,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifdef __ANDROID__
-
 #include <assert.h>
 #include "libavformat/avformat.h"
 #include "libavformat/url.h"
@@ -28,11 +26,8 @@
 #include "libavutil/log.h"
 #include "libavutil/opt.h"
 
-#include "ijkavformat/ijkavformat.h"
+#include "ijkioapplication.h"
 #include "ijkplayer/ijkavutil/opt.h"
-
-#include "j4a/class/tv/danmaku/ijk/media/player/misc/IMediaDataSource.h"
-#include "ijksdl/android/ijksdl_android_jni.h"
 
 typedef struct Context {
     AVClass        *class;
@@ -42,137 +37,107 @@ typedef struct Context {
     int64_t         logical_size;
 
     int64_t         media_data_source_ptr;
-    jobject         media_data_source;
-    jbyteArray      jbuffer;
+    IJKDataSourceContext   *media_data_source;
     int             jbuffer_capacity;
 } Context;
 
+// 打开数据
 static int ijkmds_open(URLContext *h, const char *arg, int flags, AVDictionary **options)
 {
     Context *c = h->priv_data;
-    JNIEnv *env = NULL;
-    jobject media_data_source = NULL;
     char *final = NULL;
 
+    // 截取内存地址
     av_strstart(arg, "ijkmediadatasource:", &arg);
 
-    media_data_source = (jobject) (intptr_t) strtoll(arg, &final, 10);
+    // 内存地址转换为指针
+    intptr_t media_data_source_ptr = (intptr_t) strtoll(arg, &final, 10);
+    IJKDataSourceContext *media_data_source = ((IJKDataSourceContext *)media_data_source_ptr);
     if (!media_data_source)
         return AVERROR(EINVAL);
 
-    if (JNI_OK != SDL_JNI_SetupThreadEnv(&env)) {
-        av_log(h, AV_LOG_ERROR, "%s: SDL_JNI_SetupThreadEnv: failed", __func__);
-        return AVERROR(EINVAL);
-    }
-
-    c->logical_size = J4AC_IMediaDataSource__getSize(env, media_data_source);
-    if (J4A_ExceptionCheck__catchAll(env)) {
-        return AVERROR(EINVAL);
-    } else if (c->logical_size < 0) {
+    // 获取内容大小
+    c->logical_size = media_data_source->total_size(media_data_source->data_source);
+    if (c->logical_size < 0) {
         h->is_streamed = 1;
         c->logical_size = -1;
     }
 
-    c->media_data_source = (*env)->NewGlobalRef(env, media_data_source);
-    if (J4A_ExceptionCheck__catchAll(env) || !c->media_data_source) {
+    c->media_data_source = media_data_source;
+    c->media_data_source_ptr = media_data_source_ptr;
+    if (!c->media_data_source) {
         return AVERROR(ENOMEM);
     }
 
     return 0;
 }
 
+// 关闭数据源
 static int ijkmds_close(URLContext *h)
 {
     Context *c = h->priv_data;
-    JNIEnv *env = NULL;
-
-    if (JNI_OK != SDL_JNI_SetupThreadEnv(&env)) {
-        av_log(h, AV_LOG_ERROR, "%s: SDL_JNI_SetupThreadEnv: failed", __func__);
-        return AVERROR(EINVAL);
-    }
-
-    J4A_DeleteGlobalRef__p(env, &c->jbuffer);
-
-    if (c->media_data_source) {
-        J4AC_IMediaDataSource__close__catchAll(env, c->media_data_source);
-        J4A_DeleteGlobalRef__p(env, &c->media_data_source);
+    IJKDataSourceContext *mds = c->media_data_source;
+    
+    if (mds) { // 关闭文件流
+        mds->close(mds->data_source);
     }
     c->media_data_source_ptr = 0;
 
     return 0;
 }
 
-static jobject jbuffer_grow(JNIEnv *env, URLContext *h, int new_capacity) {
-    Context *c = h->priv_data;
+//static jobject jbuffer_grow(JNIEnv *env, URLContext *h, int new_capacity) {
+//    Context *c = h->priv_data;
+//
+//    if (c->jbuffer && c->jbuffer_capacity >= new_capacity)
+//        return c->jbuffer;
+//
+//    new_capacity = FFMAX(new_capacity, c->jbuffer_capacity * 2);
+//
+//    J4A_DeleteGlobalRef__p(env, &c->jbuffer);
+//    c->jbuffer_capacity = 0;
+//
+//    c->jbuffer = J4A_NewByteArray__asGlobalRef__catchAll(env, new_capacity);
+//    if (J4A_ExceptionCheck__catchAll(env) || !c->jbuffer) {
+//        c->jbuffer = NULL;
+//        return NULL;
+//    }
+//
+//    c->jbuffer_capacity = new_capacity;
+//    return c->jbuffer;
+//}
 
-    if (c->jbuffer && c->jbuffer_capacity >= new_capacity)
-        return c->jbuffer;
-
-    new_capacity = FFMAX(new_capacity, c->jbuffer_capacity * 2);
-
-    J4A_DeleteGlobalRef__p(env, &c->jbuffer);
-    c->jbuffer_capacity = 0;
-
-    c->jbuffer = J4A_NewByteArray__asGlobalRef__catchAll(env, new_capacity);
-    if (J4A_ExceptionCheck__catchAll(env) || !c->jbuffer) {
-        c->jbuffer = NULL;
-        return NULL;
-    }
-
-    c->jbuffer_capacity = new_capacity;
-    return c->jbuffer;
-}
-
+// 读取数据
 static int ijkmds_read(URLContext *h, unsigned char *buf, int size)
 {
     Context    *c = h->priv_data;
-    JNIEnv     *env = NULL;
-    jbyteArray  jbuffer = NULL;
-    jint        ret = 0;
+    IJKDataSourceContext *mds = c->media_data_source;
+    int        ret = 0;
 
-    if (!c->media_data_source) 
+    if (!mds)
         return AVERROR(EINVAL);
 
-    if (JNI_OK != SDL_JNI_SetupThreadEnv(&env)) {
-        av_log(h, AV_LOG_ERROR, "%s: SDL_JNI_SetupThreadEnv: failed", __func__);
-        return AVERROR(EINVAL);
-    }
+    ret = mds->read_packet(mds->data_source, buf, c->logical_pos, size);
 
-    jbuffer = jbuffer_grow(env, h, size);
-    if (!jbuffer)
-        return AVERROR(ENOMEM);
-
-    ret = J4AC_IMediaDataSource__readAt(env, c->media_data_source, c->logical_pos, jbuffer, 0, size);
-    if (J4A_ExceptionCheck__catchAll(env))
-        return AVERROR(EIO);
-    else if (ret < 0)
+    if (ret < 0)
         return AVERROR_EOF;
     else if (ret == 0)
         return AVERROR(EAGAIN);
-
-    (*env)->GetByteArrayRegion(env, jbuffer, 0, ret, (jbyte*)buf);
-    if (J4A_ExceptionCheck__catchAll(env))
-        return AVERROR(EIO);
 
     c->logical_pos += ret;
     return ret;
 }
 
+// 移动到指定数据位置
 static int64_t ijkmds_seek(URLContext *h, int64_t pos, int whence)
 {
     Context *c = h->priv_data;
-    int64_t  ret;
+    IJKDataSourceContext *mds = c->media_data_source;
+//    int64_t  ret;
     int64_t  new_logical_pos;
-    JNIEnv  *env = NULL;
-    jobject  jbuffer = NULL;
 
-    if (!c->media_data_source) 
+    if (!mds)
         return AVERROR(EINVAL);
-
-    if (JNI_OK != SDL_JNI_SetupThreadEnv(&env)) {
-        av_log(h, AV_LOG_ERROR, "%s: SDL_JNI_SetupThreadEnv: failed", __func__);
-        return AVERROR(EINVAL);
-    }
 
     if (whence == AVSEEK_SIZE) {
         av_log(h, AV_LOG_TRACE, "%s: AVSEEK_SIZE: %"PRId64"\n", __func__, (int64_t)c->logical_size);
@@ -189,15 +154,10 @@ static int64_t ijkmds_seek(URLContext *h, int64_t pos, int whence)
     if (new_logical_pos < 0)
         return AVERROR(EINVAL);
 
-    jbuffer = jbuffer_grow(env, h, 0);
-    if (!jbuffer)
-        return AVERROR(ENOMEM);
-
-    ret = J4AC_IMediaDataSource__readAt(env, c->media_data_source, new_logical_pos, jbuffer, 0, 0);
-    if (J4A_ExceptionCheck__catchAll(env))
-        return AVERROR(EIO);
-    else if (ret < 0)
-        return AVERROR_EOF;
+//    ret = c->media_data_source->read_packet(c->media_data_source->data_source, new_logical_pos, jbuffer, 0, 0);
+//    ret = mds->seek_packet(mds->data_source, pos, whence);
+//    if (ret < 0)
+//        return AVERROR_EOF;
 
     c->logical_pos = new_logical_pos;
     return c->logical_pos;
@@ -229,5 +189,3 @@ URLProtocol ijkimp_ff_ijkmediadatasource_protocol = {
     .priv_data_size      = sizeof(Context),
     .priv_data_class     = &ijkmediadatasource_context_class,
 };
-
-#endif
