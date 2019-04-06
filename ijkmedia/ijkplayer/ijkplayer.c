@@ -294,6 +294,16 @@ IjkMediaMeta *ijkmp_get_meta_l(IjkMediaPlayer *mp)
     return ret;
 }
 
+int ijkmp_get_rotate(IjkMediaPlayer *mp)
+{
+    assert(mp);
+    
+    MPTRACE("%s\n", __func__);
+    int rotate = ffp_get_video_rotate_degrees(mp->ffplayer);
+    MPTRACE("%s()=%d\n", __func__, rotate);
+    return rotate;
+}
+
 void ijkmp_shutdown_l(IjkMediaPlayer *mp)
 {
     assert(mp);

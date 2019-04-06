@@ -36,6 +36,9 @@ typedef struct SDL_VoutOverlay SDL_VoutOverlay;
 struct SDL_VoutOverlay {
     int w; /**< Read-only */
     int h; /**< Read-only */
+    /** sometimes, AVFrame size is incorrect */
+    int displayWidth; /**< rendering width, Read-only */
+    int displayHeight; /**< rendering height, Read-only */
     Uint32 format; /**< Read-only */
     int planes; /**< Read-only */
     Uint16 *pitches; /**< in bytes, Read-only */

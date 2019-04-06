@@ -869,6 +869,17 @@ static size_t parse_ass_subtitle(const char *ass, char *output)
     return 0;
 }
 
+// on video rendering started, notify video buffer size changed
+static void video_rendering_started(FFPlayer *ffp, Frame *vp) {
+    if (vp->bmp) { /* Fix wrong AVFrame size(eg: 3gp) */
+        int buffer_width = vp->bmp->displayWidth;
+        int buffer_height = vp->bmp->displayHeight;
+        if (vp->width != buffer_width || vp->height != buffer_height)
+            ffp_notify_msg3(ffp, FFP_MSG_VIDEO_SIZE_CHANGED,
+                            buffer_width, buffer_height);
+    }
+}
+
 static void video_image_display2(FFPlayer *ffp)
 {
     VideoState *is = ffp->is;
@@ -903,6 +914,7 @@ static void video_image_display2(FFPlayer *ffp)
             if (!ffp->first_video_frame_rendered) {
                 ffp->first_video_frame_rendered = 1;
                 ffp_notify_msg1(ffp, FFP_MSG_VIDEO_RENDERING_START);
+                video_rendering_started(ffp, vp);
             }
             while (is->pause_req && !is->abort_request) {
                 SDL_Delay(20);
@@ -913,6 +925,7 @@ static void video_image_display2(FFPlayer *ffp)
         if (!ffp->first_video_frame_rendered) {
             ffp->first_video_frame_rendered = 1;
             ffp_notify_msg1(ffp, FFP_MSG_VIDEO_RENDERING_START);
+            video_rendering_started(ffp, vp);
         }
 
         if (is->latest_video_seek_load_serial == vp->serial) {
@@ -1625,8 +1638,23 @@ static int queue_picture(FFPlayer *ffp, AVFrame *src_frame, double pts, double d
         vp->height != src_frame->height ||
         vp->format != src_frame->format) {
 
-        if (vp->width != src_frame->width || vp->height != src_frame->height)
-            ffp_notify_msg3(ffp, FFP_MSG_VIDEO_SIZE_CHANGED, src_frame->width, src_frame->height);
+        // notify video size changed
+        // if first frame rendered, do nothing
+        if (!ffp->first_video_frame_rendered &&
+            (vp->width != src_frame->width ||
+             vp->height != src_frame->height)) {
+            int buf_width, buf_height;
+            if (vp->bmp) { // final video size
+                buf_width  = vp->bmp->displayWidth;
+                buf_height = vp->bmp->displayHeight;
+            } else { // video size from header
+                buf_width  = src_frame->width;
+                buf_height = src_frame->height;
+            }
+            
+            ffp_notify_msg3(ffp, FFP_MSG_VIDEO_SIZE_CHANGED,
+                            buf_width, buf_height);
+        }
 
         vp->allocated = 0;
         vp->width = src_frame->width;

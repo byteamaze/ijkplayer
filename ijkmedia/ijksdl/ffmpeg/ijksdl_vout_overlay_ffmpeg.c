@@ -397,6 +397,8 @@ SDL_VoutOverlay *SDL_VoutFFmpeg_CreateOverlay(int width, int height, int frame_f
         goto fail;
     }
 
+    overlay->displayWidth = buf_width;
+    overlay->displayHeight = buf_height;
     opaque->managed_frame = opaque_setup_frame(opaque, ff_format, buf_width, buf_height);
     if (!opaque->managed_frame) {
         ALOGE("overlay->opaque->frame allocation failed\n");
