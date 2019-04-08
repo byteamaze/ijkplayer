@@ -871,13 +871,6 @@ static size_t parse_ass_subtitle(const char *ass, char *output)
 
 // on video rendering started, notify video buffer size changed
 static void video_rendering_started(FFPlayer *ffp, Frame *vp) {
-    if (vp->bmp) { /* Fix wrong AVFrame size(eg: 3gp) */
-        int buffer_width = vp->bmp->displayWidth;
-        int buffer_height = vp->bmp->displayHeight;
-        if (vp->width != buffer_width || vp->height != buffer_height)
-            ffp_notify_msg3(ffp, FFP_MSG_VIDEO_SIZE_CHANGED,
-                            buffer_width, buffer_height);
-    }
 }
 
 static void video_image_display2(FFPlayer *ffp)
@@ -1640,20 +1633,13 @@ static int queue_picture(FFPlayer *ffp, AVFrame *src_frame, double pts, double d
 
         // notify video size changed
         // if first frame rendered, do nothing
-        if (!ffp->first_video_frame_rendered &&
-            (vp->width != src_frame->width ||
+        if ((vp->width != src_frame->width ||
              vp->height != src_frame->height)) {
-            int buf_width, buf_height;
-            if (vp->bmp) { // final video size
-                buf_width  = vp->bmp->displayWidth;
-                buf_height = vp->bmp->displayHeight;
-            } else { // video size from header
-                buf_width  = src_frame->width;
-                buf_height = src_frame->height;
-            }
-            
+            // notify video sar and size changed
+            ffp_notify_msg3(ffp, FFP_MSG_SAR_CHANGED,
+                            vp->sar.num, vp->sar.den);
             ffp_notify_msg3(ffp, FFP_MSG_VIDEO_SIZE_CHANGED,
-                            buf_width, buf_height);
+                            src_frame->width, src_frame->height);
         }
 
         vp->allocated = 0;
@@ -3352,8 +3338,9 @@ static int read_thread(void *arg)
         toggle_pause(ffp, 1);
     if (is->video_st && is->video_st->codecpar) {
         AVCodecParameters *codecpar = is->video_st->codecpar;
-        ffp_notify_msg3(ffp, FFP_MSG_VIDEO_SIZE_CHANGED, codecpar->width, codecpar->height);
         ffp_notify_msg3(ffp, FFP_MSG_SAR_CHANGED, codecpar->sample_aspect_ratio.num, codecpar->sample_aspect_ratio.den);
+        ffp_notify_msg3(ffp, FFP_MSG_VIDEO_SIZE_CHANGED,
+                        codecpar->width, codecpar->height);
     }
     ffp->prepared = true;
     ffp_notify_msg1(ffp, FFP_MSG_PREPARED);
