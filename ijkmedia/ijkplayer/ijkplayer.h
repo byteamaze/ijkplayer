@@ -34,6 +34,7 @@
 #endif
 
 typedef struct IjkMediaPlayer IjkMediaPlayer;
+typedef struct IjkStreamInfo IjkStreamInfo;
 struct FFPlayer;
 struct SDL_Vout;
 
@@ -187,6 +188,12 @@ IjkMediaMeta   *ijkmp_get_meta_l(IjkMediaPlayer *mp);
 
 // get video rotate
 int ijkmp_get_rotate(IjkMediaPlayer *mp);
+
+// get subtitle stream list
+int ijkmp_get_subtitle_stream(IjkMediaPlayer *mp);
+
+// get subtitle stream list
+int ijkmp_get_audio_stream(IjkMediaPlayer *mp);
 
 // preferred to be called explicity, can be called multiple times
 // NOTE: ijkmp_shutdown may block thread

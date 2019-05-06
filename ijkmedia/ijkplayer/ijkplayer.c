@@ -304,6 +304,55 @@ int ijkmp_get_rotate(IjkMediaPlayer *mp)
     return rotate;
 }
 
+// get subtitle stream list
+int ijkmp_get_subtitle_streams(IjkMediaPlayer *mp)
+{
+    assert(mp);
+    
+    MPTRACE("%s\n", __func__);
+    VideoState *is = mp->ffplayer->is;
+    if (!is) return -1;
+    
+    AVFormatContext *ic = is->ic;
+    if (!ic) return -1;
+    
+    for (int i = 0; i < ic->nb_streams; i++) {
+        AVStream *st = ic->streams[i];
+        if (st->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+            AVDictionaryEntry *entry = av_dict_get(st->metadata, "language", NULL, AV_DICT_IGNORE_SUFFIX);
+            printf("subtitle: [%s] %s\n", entry->value,
+                   avcodec_get_name(st->codecpar->codec_id));
+        }
+    }
+
+    return 0;
+}
+
+// get subtitle stream list
+int ijkmp_get_audio_streams(IjkMediaPlayer *mp, IjkStreamInfo *si)
+{
+    assert(mp);
+    
+    MPTRACE("%s\n", __func__);
+    VideoState *is = mp->ffplayer->is;
+    if (!is) return -1;
+    
+    AVFormatContext *ic = is->ic;
+    if (!ic) return -1;
+    
+    for (int i = 0; i < ic->nb_streams; i++) {
+        AVStream *st = ic->streams[i];
+        if (st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            AVDictionaryEntry *entry = av_dict_get(st->metadata, "language", NULL, AV_DICT_IGNORE_SUFFIX);
+            printf("audio: [%s] %s %dkHz\n", entry->value,
+                   avcodec_get_name(st->codecpar->codec_id),
+                   st->codecpar->sample_rate / 1000);
+        }
+    }
+    
+    return 0;
+}
+
 void ijkmp_shutdown_l(IjkMediaPlayer *mp)
 {
     assert(mp);

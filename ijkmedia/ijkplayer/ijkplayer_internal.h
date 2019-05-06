@@ -49,4 +49,12 @@ struct IjkMediaPlayer {
     long seek_msec;
 };
 
+struct IjkStreamInfo {
+    int index;
+    char *language;
+    char *codec_id;
+    char *codec_type;
+    int sample_rate;
+};
+
 #endif
